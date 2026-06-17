@@ -61,9 +61,12 @@
                             <th class="p-3 border-b border-gray-600">Emiten</th>
                             <th class="p-3 border-b border-gray-600">Tgl Buy</th>
                             <th class="p-3 border-b border-gray-600">Harga Beli</th>
+                            <th class="p-3 border-b border-gray-600 text-center">Lot</th>
+                            <th class="p-3 border-b border-gray-600">Modal (Rp)</th>
                             <th class="p-3 border-b border-gray-600">Tgl Sell</th>
-                            <th class="p-3 border-b border-gray-600">Harga Jual/Live</th>
+                            <th class="p-3 border-b border-gray-600">Harga Jual</th>
                             <th class="p-3 border-b border-gray-600">P/L (%)</th>
+                            <th class="p-3 border-b border-gray-600">P/L (Rp)</th>
                             <th class="p-3 border-b border-gray-600 text-center">Days</th>
                             <th class="p-3 border-b border-gray-600 text-center">Status</th>
                         </tr>
@@ -95,11 +98,11 @@
                         <thead class="bg-gray-700 text-gray-300">
                             <tr>
                                 <th class="p-3 border-b border-gray-600">Bulan</th>
-                                <th class="p-3 border-b border-gray-600 text-center">Total Trade (Closed)</th>
-                                <th class="p-3 border-b border-gray-600 text-center">Sinyal Win</th>
-                                <th class="p-3 border-b border-gray-600 text-center">Sinyal Loss</th>
+                                <th class="p-3 border-b border-gray-600 text-center">Total Trade</th>
+                                <th class="p-3 border-b border-gray-600 text-center">Win</th>
+                                <th class="p-3 border-b border-gray-600 text-center">Loss</th>
                                 <th class="p-3 border-b border-gray-600 text-center">Winrate</th>
-                                <th class="p-3 border-b border-gray-600">Total Profit (%)</th>
+                                <th class="p-3 border-b border-gray-600">Net Profit (Rp)</th>
                             </tr>
                         </thead>
                         <tbody id="table-bulanan-body">
@@ -135,53 +138,79 @@
                 complete: function(results) {
                     let data = results.data;
                     
-                    // --- 1. SETTINGAN DASAR SIMULASI 500 JUTA ---
+                    // --- 1. SETTINGAN DASAR SIMULASI ---
                     let MODAL_AWAL = 500000000;
-                    let ALOKASI_PER_TRADE = 25000000; // Rp 25 Juta per emiten (5% Risk sizing)
-
-                    let closedTrades = data.filter(r => r.STATUS === "CLOSE");
-                    let winCount = closedTrades.filter(r => parseFloat(r.PL_PCT) > 0).length;
-                    let winrate = closedTrades.length > 0 ? ((winCount / closedTrades.length) * 100).toFixed(1) : 0;
-                    
-                    let allPl = data.map(r => parseFloat(r.PL_PCT)).filter(n => !isNaN(n));
-                    let maxProfit = allPl.length > 0 ? Math.max(...allPl).toFixed(1) : 0;
-                    let maxLoss = allPl.length > 0 ? Math.min(...allPl).toFixed(1) : 0;
-
-                    // Hitung Keuntungan Riil Berdasarkan Porsi Rp 25 Juta/Trade
-                    let totalNetProfitRupiah = data.reduce((acc, r) => acc + (ALOKASI_PER_TRADE * ((parseFloat(r.PL_PCT) || 0) / 100)), 0);
-                    let saldoAktual = MODAL_AWAL + totalNetProfitRupiah;
-
+                    let ALOKASI_PER_TRADE = 25000000; // Alokasi ideal (nanti disesuaikan Lot)
                     let formatRp = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 });
 
-                    document.getElementById('val-winrate').innerText = `${winrate}%`;
-                    document.getElementById('val-net-profit').innerText = formatRp.format(totalNetProfitRupiah);
-                    document.getElementById('val-net-profit').className = `text-2xl font-bold mt-1 ${totalNetProfitRupiah >= 0 ? 'text-green-400' : 'text-red-400'}`;
-                    document.getElementById('val-saldo-aktual').innerText = formatRp.format(saldoAktual);
-
-                    // Render Tabel Portofolio Utama
+                    let totalNetProfitRupiah = 0;
                     let tableHTML = "";
+
+                    // Kalkulasi Setiap Baris
                     data.forEach(row => {
+                        let hargaBuy = parseFloat(row.HARGA_BUY) || 0;
+                        let hargaSell = parseFloat(row.HARGA_SELL) || 0;
+                        let plPct = parseFloat(row.PL_PCT) || 0;
+                        
+                        // Perhitungan Lot & Rupiah Aktual
+                        let lot = 0;
+                        let modalTerpakai = 0;
+                        let nominalPL = 0;
+                        
+                        if (hargaBuy > 0) {
+                            lot = Math.floor(ALOKASI_PER_TRADE / (hargaBuy * 100));
+                            modalTerpakai = lot * 100 * hargaBuy;
+                            if (hargaSell > 0) {
+                                nominalPL = (hargaSell - hargaBuy) * lot * 100;
+                            }
+                        }
+
+                        // Simpan log nominalPL ke object data agar bisa diakses grafik
+                        row._nominalPL = nominalPL;
+
+                        if (row.STATUS === "CLOSE") {
+                            totalNetProfitRupiah += nominalPL;
+                        }
+
+                        // Rendering HTML Baris
                         let statusBadge = row.STATUS === "OPEN" ? `<span class="bg-blue-600 text-white px-2 py-1 rounded text-xs font-bold">OPEN</span>` :
                                           row.STATUS === "HOLD" ? `<span class="bg-yellow-500 text-black px-2 py-1 rounded text-xs font-bold">HOLD</span>` :
                                           `<span class="bg-gray-600 text-white px-2 py-1 rounded text-xs font-bold">CLOSE</span>`;
 
-                        let plColor = parseFloat(row.PL_PCT) > 0 ? "text-green-400" : (parseFloat(row.PL_PCT) < 0 ? "text-red-400" : "text-gray-400");
-                        let plText = parseFloat(row.PL_PCT) > 0 ? `+${row.PL_PCT}%` : `${row.PL_PCT}%`;
-                        let hargaSellText = row.HARGA_SELL !== "0" ? `Rp ${row.HARGA_SELL}` : "-";
+                        let plColor = plPct > 0 ? "text-green-400" : (plPct < 0 ? "text-red-400" : "text-gray-400");
+                        let plText = plPct > 0 ? `+${plPct}%` : `${plPct}%`;
+                        let rpColor = nominalPL > 0 ? "text-green-400" : (nominalPL < 0 ? "text-red-400" : "text-gray-400");
+                        let rpText = nominalPL > 0 ? `+${formatRp.format(nominalPL)}` : formatRp.format(nominalPL);
+                        let hargaSellText = hargaSell !== 0 ? `Rp ${hargaSell}` : "-";
 
                         tableHTML += `
                             <tr class="hover:bg-gray-750 border-b border-gray-700 transition-colors">
                                 <td class="p-3 font-bold text-white">${row.EMITEN}</td>
                                 <td class="p-3 text-gray-400">${row.TGL_BUY}</td>
-                                <td class="p-3">Rp ${row.HARGA_BUY}</td>
+                                <td class="p-3">Rp ${hargaBuy}</td>
+                                <td class="p-3 text-center">${lot}</td>
+                                <td class="p-3">${formatRp.format(modalTerpakai)}</td>
                                 <td class="p-3 text-gray-400">${row.TGL_SELL}</td>
                                 <td class="p-3">${hargaSellText}</td>
                                 <td class="p-3 font-mono font-bold ${plColor}">${plText}</td>
+                                <td class="p-3 font-mono font-bold ${rpColor}">${rpText}</td>
                                 <td class="p-3 text-center">${row.DAYS}</td>
                                 <td class="p-3 text-center">${statusBadge}</td>
                             </tr>
                         `;
                     });
+
+                    // Update Metrik Atas
+                    let closedTrades = data.filter(r => r.STATUS === "CLOSE");
+                    let winCount = closedTrades.filter(r => parseFloat(r.PL_PCT) > 0).length;
+                    let winrate = closedTrades.length > 0 ? ((winCount / closedTrades.length) * 100).toFixed(1) : 0;
+                    
+                    let saldoAktual = MODAL_AWAL + totalNetProfitRupiah;
+
+                    document.getElementById('val-winrate').innerText = `${winrate}%`;
+                    document.getElementById('val-net-profit').innerText = formatRp.format(totalNetProfitRupiah);
+                    document.getElementById('val-net-profit').className = `text-2xl font-bold mt-1 ${totalNetProfitRupiah >= 0 ? 'text-green-400' : 'text-red-400'}`;
+                    document.getElementById('val-saldo-aktual').innerText = formatRp.format(saldoAktual);
                     document.getElementById('table-body').innerHTML = tableHTML;
 
                     // --- 2. PERSIAPAN DATA GRAFIK & REKAP BULANAN ---
@@ -195,22 +224,24 @@
                     let summaryTahunan = {};
                     for(let i=1; i<=12; i++) {
                         let mStr = i < 10 ? "0"+i : ""+i;
-                        summaryTahunan[`${currentYear}-${mStr}`] = { monthName: monthNames[i-1], total: 0, win: 0, loss: 0, profit: 0 };
+                        summaryTahunan[`${currentYear}-${mStr}`] = { monthName: monthNames[i-1], total: 0, win: 0, loss: 0, profitPct: 0, profitRp: 0 };
                     }
 
                     let monthlyChartData = {};
                     validClosed.forEach(r => {
                         let monthStr = r.TGL_SELL.substring(0, 7);
-                        let pl = parseFloat(r.PL_PCT);
+                        let plPct = parseFloat(r.PL_PCT);
+                        let plRp = r._nominalPL;
                         
                         if(!monthlyChartData[monthStr]) monthlyChartData[monthStr] = 0;
-                        monthlyChartData[monthStr] += pl;
+                        monthlyChartData[monthStr] += plPct;
 
                         if(summaryTahunan[monthStr]) {
                             summaryTahunan[monthStr].total += 1;
-                            if(pl > 0) summaryTahunan[monthStr].win += 1;
-                            else if(pl < 0) summaryTahunan[monthStr].loss += 1;
-                            summaryTahunan[monthStr].profit += pl;
+                            if(plPct > 0) summaryTahunan[monthStr].win += 1;
+                            else if(plPct < 0) summaryTahunan[monthStr].loss += 1;
+                            summaryTahunan[monthStr].profitPct += plPct;
+                            summaryTahunan[monthStr].profitRp += plRp;
                         }
                     });
 
@@ -218,8 +249,8 @@
                     Object.keys(summaryTahunan).sort().forEach(k => {
                         let d = summaryTahunan[k];
                         let wr = d.total > 0 ? ((d.win / d.total) * 100).toFixed(1) + "%" : "-";
-                        let plColor = d.profit > 0 ? "text-green-400" : (d.profit < 0 ? "text-red-400" : "text-gray-400");
-                        let plText = d.profit > 0 ? `+${d.profit.toFixed(1)}%` : `${d.profit.toFixed(1)}%`;
+                        let rpColor = d.profitRp > 0 ? "text-green-400" : (d.profitRp < 0 ? "text-red-400" : "text-gray-400");
+                        let rpText = d.profitRp > 0 ? `+${formatRp.format(d.profitRp)}` : formatRp.format(d.profitRp);
                         tbodyBulanan += `
                             <tr class="hover:bg-gray-750 border-b border-gray-700 transition-colors">
                                 <td class="p-3 font-bold">${d.monthName}</td>
@@ -227,34 +258,30 @@
                                 <td class="p-3 text-center ${d.win > 0 ? 'text-green-400' : ''}">${d.win > 0 ? d.win : "-"}</td>
                                 <td class="p-3 text-center ${d.loss > 0 ? 'text-red-400' : ''}">${d.loss > 0 ? d.loss : "-"}</td>
                                 <td class="p-3 text-center font-bold">${wr}</td>
-                                <td class="p-3 font-mono font-bold ${d.profit !== 0 ? plColor : ''}">${d.profit !== 0 ? plText : "-"}</td>
+                                <td class="p-3 font-mono font-bold ${d.profitRp !== 0 ? rpColor : ''}">${d.profitRp !== 0 ? rpText : "-"}</td>
                             </tr>
                         `;
                     });
                     document.getElementById('table-bulanan-body').innerHTML = tbodyBulanan;
 
-                    // --- 3. LOGIKA GRAPH EQUITY CURVE (NOMINAL RUPIAH) ---
+                    // --- 3. LOGIKA GRAPH EQUITY CURVE ---
                     let labelsEquity = [];
                     let dataEquity = [];
                     let currentRunningEquity = MODAL_AWAL;
 
-                    // Titik dasar awal modal
                     if(validClosed.length > 0) {
                         labelsEquity.push("Start");
                         dataEquity.push(MODAL_AWAL);
                     }
 
                     validClosed.forEach(r => {
-                        let profitRupiah = ALOKASI_PER_TRADE * (parseFloat(r.PL_PCT) / 100);
-                        currentRunningEquity += profitRupiah;
-                        
+                        currentRunningEquity += r._nominalPL;
                         labelsEquity.push(r.TGL_SELL);
                         dataEquity.push(currentRunningEquity);
                     });
 
                     Chart.defaults.color = '#9ca3af'; 
 
-                    // Render Line Chart (Equity Curve Rupiah)
                     new Chart(document.getElementById('chartBulanan'), {
                         type: 'line',
                         data: {
@@ -262,7 +289,7 @@
                             datasets: [{
                                 label: 'Saldo Equity (Rp)',
                                 data: dataEquity,
-                                borderColor: '#10b981', // Hijau pertumbuhan
+                                borderColor: '#10b981', 
                                 backgroundColor: 'rgba(16, 185, 129, 0.1)',
                                 borderWidth: 3,
                                 fill: true,
@@ -274,16 +301,13 @@
                             scales: { 
                                 y: { 
                                     ticks: {
-                                        callback: function(value) {
-                                            return 'Rp ' + (value / 1000000) + ' Jt';
-                                        }
+                                        callback: function(value) { return 'Rp ' + (value / 1000000) + ' Jt'; }
                                     }
                                 } 
                             } 
                         }
                     });
 
-                    // Render Bar Chart (Tahunan Per Bulan)
                     let labelsTahunan = Object.keys(monthlyChartData);
                     let dataTahunan = labelsTahunan.map(k => monthlyChartData[k].toFixed(2));
 
