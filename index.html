@@ -84,7 +84,7 @@
                     <canvas id="chartBulanan"></canvas>
                 </div>
                 <div class="bg-gray-800 p-4 rounded-lg border border-gray-700 shadow-xl">
-                    <h2 class="text-lg font-bold text-center mb-4 text-gray-200">Total Profit Per Bulan (%)</h2>
+                    <h2 class="text-lg font-bold text-center mb-4 text-gray-200">Total Profit Per Bulan (Rupiah)</h2>
                     <canvas id="chartTahunan"></canvas>
                 </div>
             </div>
@@ -138,21 +138,19 @@
                 complete: function(results) {
                     let data = results.data;
                     
-                    // --- 1. SETTINGAN DASAR SIMULASI ---
+                    // --- 1. CONFIG MONEY MANAGEMENT RLA (Alokasi 10% dari Rp 500 Juta) ---
                     let MODAL_AWAL = 500000000;
-                    let ALOKASI_PER_TRADE = 25000000; // Alokasi ideal (nanti disesuaikan Lot)
+                    let ALOKASI_PER_TRADE = 50000000; // Rp 50.000.000 per Emiten (10% MM)
                     let formatRp = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 });
 
                     let totalNetProfitRupiah = 0;
                     let tableHTML = "";
 
-                    // Kalkulasi Setiap Baris
                     data.forEach(row => {
                         let hargaBuy = parseFloat(row.HARGA_BUY) || 0;
                         let hargaSell = parseFloat(row.HARGA_SELL) || 0;
                         let plPct = parseFloat(row.PL_PCT) || 0;
                         
-                        // Perhitungan Lot & Rupiah Aktual
                         let lot = 0;
                         let modalTerpakai = 0;
                         let nominalPL = 0;
@@ -165,14 +163,12 @@
                             }
                         }
 
-                        // Simpan log nominalPL ke object data agar bisa diakses grafik
                         row._nominalPL = nominalPL;
 
                         if (row.STATUS === "CLOSE") {
                             totalNetProfitRupiah += nominalPL;
                         }
 
-                        // Rendering HTML Baris
                         let statusBadge = row.STATUS === "OPEN" ? `<span class="bg-blue-600 text-white px-2 py-1 rounded text-xs font-bold">OPEN</span>` :
                                           row.STATUS === "HOLD" ? `<span class="bg-yellow-500 text-black px-2 py-1 rounded text-xs font-bold">HOLD</span>` :
                                           `<span class="bg-gray-600 text-white px-2 py-1 rounded text-xs font-bold">CLOSE</span>`;
@@ -200,11 +196,9 @@
                         `;
                     });
 
-                    // Update Metrik Atas
                     let closedTrades = data.filter(r => r.STATUS === "CLOSE");
                     let winCount = closedTrades.filter(r => parseFloat(r.PL_PCT) > 0).length;
                     let winrate = closedTrades.length > 0 ? ((winCount / closedTrades.length) * 100).toFixed(1) : 0;
-                    
                     let saldoAktual = MODAL_AWAL + totalNetProfitRupiah;
 
                     document.getElementById('val-winrate').innerText = `${winrate}%`;
@@ -213,7 +207,7 @@
                     document.getElementById('val-saldo-aktual').innerText = formatRp.format(saldoAktual);
                     document.getElementById('table-body').innerHTML = tableHTML;
 
-                    // --- 2. PERSIAPAN DATA GRAFIK & REKAP BULANAN ---
+                    // --- 2. PREPARASI GRAFIK JANUARI - DESEMBER (12 BULAN UTUH) ---
                     let validClosed = closedTrades.filter(r => r.TGL_SELL && r.TGL_SELL !== "-");
                     validClosed.sort((a, b) => new Date(a.TGL_SELL) - new Date(b.TGL_SELL));
 
@@ -221,26 +215,31 @@
                     document.getElementById('judul-tabel-bulanan').innerText = `Ringkasan Performa Tahunan (${currentYear})`;
 
                     const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+                    
+                    // Blueprint array statis 12 posisi untuk data grafik bar
+                    let dataTahunanRp = new Array(12).fill(0);
+                    
                     let summaryTahunan = {};
                     for(let i=1; i<=12; i++) {
                         let mStr = i < 10 ? "0"+i : ""+i;
-                        summaryTahunan[`${currentYear}-${mStr}`] = { monthName: monthNames[i-1], total: 0, win: 0, loss: 0, profitPct: 0, profitRp: 0 };
+                        summaryTahunan[`${currentYear}-${mStr}`] = { monthName: monthNames[i-1], total: 0, win: 0, loss: 0, profitRp: 0 };
                     }
 
-                    let monthlyChartData = {};
                     validClosed.forEach(r => {
-                        let monthStr = r.TGL_SELL.substring(0, 7);
+                        let monthStr = r.TGL_SELL.substring(0, 7); // YYYY-MM
+                        let monthIdx = parseInt(r.TGL_SELL.substring(5, 7)) - 1; // 0 - 11
                         let plPct = parseFloat(r.PL_PCT);
                         let plRp = r._nominalPL;
                         
-                        if(!monthlyChartData[monthStr]) monthlyChartData[monthStr] = 0;
-                        monthlyChartData[monthStr] += plPct;
+                        // Isi data array grafik jika berada di tahun berjalan
+                        if (monthIdx >= 0 && monthIdx <= 11 && r.TGL_SELL.startsWith(currentYear.toString())) {
+                            dataTahunanRp[monthIdx] += plRp;
+                        }
 
                         if(summaryTahunan[monthStr]) {
                             summaryTahunan[monthStr].total += 1;
                             if(plPct > 0) summaryTahunan[monthStr].win += 1;
                             else if(plPct < 0) summaryTahunan[monthStr].loss += 1;
-                            summaryTahunan[monthStr].profitPct += plPct;
                             summaryTahunan[monthStr].profitRp += plRp;
                         }
                     });
@@ -264,7 +263,7 @@
                     });
                     document.getElementById('table-bulanan-body').innerHTML = tbodyBulanan;
 
-                    // --- 3. LOGIKA GRAPH EQUITY CURVE ---
+                    // --- 3. GRAPH 1: EQUITY GROWTH LINE CHART ---
                     let labelsEquity = [];
                     let dataEquity = [];
                     let currentRunningEquity = MODAL_AWAL;
@@ -308,21 +307,29 @@
                         }
                     });
 
-                    let labelsTahunan = Object.keys(monthlyChartData);
-                    let dataTahunan = labelsTahunan.map(k => monthlyChartData[k].toFixed(2));
-
+                    // --- 4. GRAPH 2: TAHUNAN BAR CHART (FIXED NOMINAL HARIAN HARGA INDIVIDU) ---
                     new Chart(document.getElementById('chartTahunan'), {
                         type: 'bar',
                         data: {
-                            labels: labelsTahunan,
+                            labels: monthNames, // Fix Januari - Desember di Sumbu X
                             datasets: [{
-                                label: 'Total Profit Per Bulan (%)',
-                                data: dataTahunan,
-                                backgroundColor: dataTahunan.map(val => val >= 0 ? '#10b981' : '#ef4444'), 
+                                label: 'Net Profit Per Bulan (Rp)',
+                                data: dataTahunanRp, // Menggunakan akumulasi Nominal Rupiah bulanan
+                                backgroundColor: dataTahunanRp.map(val => val >= 0 ? '#10b981' : '#ef4444'), 
                                 borderRadius: 4
                             }]
                         },
-                        options: { responsive: true, scales: { y: { beginAtZero: true } } }
+                        options: { 
+                            responsive: true, 
+                            scales: { 
+                                y: { 
+                                    beginAtZero: true,
+                                    ticks: {
+                                        callback: function(value) { return 'Rp ' + (value / 1000000) + ' Jt'; }
+                                    }
+                                } 
+                            } 
+                        }
                     });
                 }
             });
