@@ -3,58 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Winrate V2 Illusix</title>
+    <title>Portofolio Live Tracker - Framework RLA</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
 </head>
-<body class="bg-gray-900 text-white font-sans antialiased p-4 md:p-8">
+<body class="bg-gray-900 text-gray-200 font-sans antialiased p-4 md:p-8">
 
-    <div class="max-w-6xl mx-auto">
+    <div class="max-w-7xl mx-auto">
         <header class="mb-8 flex items-center justify-between border-b border-gray-700 pb-4">
             <div>
-                <h1 class="text-3xl font-bold text-blue-400">🤖 Botaxx V2 Tracker</h1>
-                <p class="text-gray-400 mt-1">Live Winrate & Performance Dashboard</p>
+                <h1 class="text-3xl font-bold text-blue-400">📊 Portofolio Live Ledger</h1>
+                <p class="text-gray-400 mt-1">Real-time Yahoo Finance Sync & Trade History</p>
             </div>
             <div class="text-right">
-                <p class="text-sm text-gray-400">Status Sistem</p>
                 <p class="text-green-400 font-semibold flex items-center justify-end">
-                    <span class="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></span> ONLINE
+                    <span class="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></span> SYSTEM ONLINE
                 </p>
             </div>
         </header>
 
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <div class="bg-gray-800 p-6 rounded-lg border border-gray-700 shadow-lg">
-                <h3 class="text-gray-400 text-sm font-semibold uppercase">Winrate Sinyal</h3>
-                <p id="val-winrate" class="text-4xl font-bold text-green-400 mt-2">0%</p>
-            </div>
-            <div class="bg-gray-800 p-6 rounded-lg border border-gray-700 shadow-lg">
-                <h3 class="text-gray-400 text-sm font-semibold uppercase">Total Sinyal BUY</h3>
-                <p id="val-buy" class="text-4xl font-bold text-blue-400 mt-2">0</p>
-            </div>
-            <div class="bg-gray-800 p-6 rounded-lg border border-gray-700 shadow-lg">
-                <h3 class="text-gray-400 text-sm font-semibold uppercase">Sukses TP</h3>
-                <p id="val-tp" class="text-4xl font-bold text-yellow-400 mt-2">0</p>
-            </div>
-            <div class="bg-gray-800 p-6 rounded-lg border border-gray-700 shadow-lg">
-                <h3 class="text-gray-400 text-sm font-semibold uppercase">Avg. Profit TP</h3>
-                <p id="val-profit" class="text-4xl font-bold text-purple-400 mt-2">0%</p>
-            </div>
-        </div>
-
-        <div class="bg-gray-800 rounded-lg border border-gray-700 shadow-lg overflow-hidden">
-            <div class="p-4 border-b border-gray-700 bg-gray-850">
-                <h2 class="text-lg font-semibold">Riwayat Sinyal Terbaru</h2>
-            </div>
-            <div class="overflow-x-auto h-96">
-                <table class="w-full text-left border-collapse">
-                    <thead class="bg-gray-700 text-gray-300 sticky top-0">
+        <div class="bg-gray-800 rounded-lg border border-gray-700 shadow-xl overflow-hidden">
+            <div class="overflow-x-auto max-h-[700px]">
+                <table class="w-full text-left border-collapse whitespace-nowrap">
+                    <thead class="bg-gray-700 text-gray-300 sticky top-0 z-10 shadow-md">
                         <tr>
-                            <th class="p-3 border-b border-gray-600">Waktu (WIB)</th>
-                            <th class="p-3 border-b border-gray-600">Tipe</th>
                             <th class="p-3 border-b border-gray-600">Emiten</th>
-                            <th class="p-3 border-b border-gray-600">Harga Entry</th>
-                            <th class="p-3 border-b border-gray-600">Profit (%)</th>
+                            <th class="p-3 border-b border-gray-600">Tgl Buy</th>
+                            <th class="p-3 border-b border-gray-600">Harga Beli</th>
+                            <th class="p-3 border-b border-gray-600">Tgl Sell</th>
+                            <th class="p-3 border-b border-gray-600">Harga Jual/Live</th>
+                            <th class="p-3 border-b border-gray-600">P/L (%)</th>
+                            <th class="p-3 border-b border-gray-600 text-center">Days</th>
+                            <th class="p-3 border-b border-gray-600 text-center">Status</th>
                         </tr>
                     </thead>
                     <tbody id="table-body" class="text-sm">
@@ -66,60 +46,39 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            const csvUrl = "V2openclose.csv"; 
-
-            Papa.parse(csvUrl, {
+            Papa.parse("portofolio_web.csv", {
                 download: true,
                 header: true,
                 skipEmptyLines: true,
                 complete: function(results) {
-                    const data = results.data;
-                    let buySet = new Set();
-                    let tpSet = new Set();
-                    let totalProfit = 0;
-                    let tpCount = 0;
                     let tableHTML = "";
+                    
+                    results.data.forEach(row => {
+                        // Badge Warna Status
+                        let statusBadge = "";
+                        if(row.STATUS === "OPEN") statusBadge = `<span class="bg-blue-600 text-white px-2 py-1 rounded text-xs font-bold">OPEN</span>`;
+                        else if(row.STATUS === "HOLD") statusBadge = `<span class="bg-yellow-500 text-black px-2 py-1 rounded text-xs font-bold">HOLD</span>`;
+                        else if(row.STATUS === "CLOSE") statusBadge = `<span class="bg-gray-600 text-white px-2 py-1 rounded text-xs font-bold">CLOSE</span>`;
 
-                    data.forEach(row => {
-                        if(!row.TIPE || !row.EMITEN) return;
-                        if(row.TIPE === 'BUY') {
-                            buySet.add(row.EMITEN);
-                        } else if(row.TIPE === 'TP') {
-                            tpSet.add(row.EMITEN);
-                            let profit = parseFloat(row.PROFIT_PCT);
-                            if(!isNaN(profit)) {
-                                totalProfit += profit;
-                                tpCount++;
-                            }
-                        }
+                        // Pewarnaan P/L
+                        let plColor = parseFloat(row.PL_PCT) > 0 ? "text-green-400" : (parseFloat(row.PL_PCT) < 0 ? "text-red-400" : "text-gray-400");
+                        let plText = parseFloat(row.PL_PCT) > 0 ? `+${row.PL_PCT}%` : `${row.PL_PCT}%`;
+                        let hargaSellText = row.HARGA_SELL !== "0" ? `Rp ${row.HARGA_SELL}` : "-";
 
-                        let badgeClass = row.TIPE === 'BUY' ? 'bg-blue-600 text-white' : 'bg-green-600 text-white';
-                        let profitText = (row.PROFIT_PCT && row.PROFIT_PCT !== "0.0") ? `+${row.PROFIT_PCT}%` : "-";
-                        
                         tableHTML += `
-                            <tr class="hover:bg-gray-700 border-b border-gray-700">
-                                <td class="p-3">${row.WAKTU_WIB}</td>
-                                <td class="p-3"><span class="px-2 py-1 text-xs font-bold rounded ${badgeClass}">${row.TIPE}</span></td>
-                                <td class="p-3 font-bold">${row.EMITEN}</td>
-                                <td class="p-3">Rp ${row.HARGA_ENTRY}</td>
-                                <td class="p-3 font-mono text-green-400">${profitText}</td>
+                            <tr class="hover:bg-gray-750 border-b border-gray-700 transition-colors">
+                                <td class="p-3 font-bold text-white">${row.EMITEN}</td>
+                                <td class="p-3 text-gray-400">${row.TGL_BUY}</td>
+                                <td class="p-3">Rp ${row.HARGA_BUY}</td>
+                                <td class="p-3 text-gray-400">${row.TGL_SELL}</td>
+                                <td class="p-3">${hargaSellText}</td>
+                                <td class="p-3 font-mono font-bold ${plColor}">${plText}</td>
+                                <td class="p-3 text-center">${row.DAYS}</td>
+                                <td class="p-3 text-center">${statusBadge}</td>
                             </tr>
                         `;
                     });
 
-                    let totalBuyEmiten = buySet.size;
-                    let suksesTP = 0;
-                    buySet.forEach(emiten => {
-                        if(tpSet.has(emiten)) suksesTP++;
-                    });
-
-                    let winrate = totalBuyEmiten > 0 ? ((suksesTP / totalBuyEmiten) * 100).toFixed(1) : 0;
-                    let avgProfit = tpCount > 0 ? (totalProfit / tpCount).toFixed(1) : 0;
-
-                    document.getElementById('val-winrate').innerText = `${winrate}%`;
-                    document.getElementById('val-buy').innerText = data.filter(r => r.TIPE === 'BUY').length;
-                    document.getElementById('val-tp').innerText = tpCount;
-                    document.getElementById('val-profit').innerText = `+${avgProfit}%`;
                     document.getElementById('table-body').innerHTML = tableHTML;
                 }
             });
