@@ -6,11 +6,12 @@
     <title>Portofolio Mbak Amel V2</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="bg-gray-900 text-gray-200 font-sans antialiased p-4 md:p-8">
 
     <div class="max-w-7xl mx-auto">
-        <header class="mb-8 flex items-center justify-between border-b border-gray-700 pb-4">
+        <header class="mb-6 flex items-center justify-between border-b border-gray-700 pb-4">
             <div>
                 <h1 class="text-3xl font-bold text-blue-400">📈 Portofolio Mbak Amel V2</h1>
                 <p class="text-gray-400 mt-1">Live Trading Tracker & Performance Analytics</p>
@@ -41,7 +42,18 @@
             </div>
         </div>
 
-        <div class="bg-gray-800 rounded-lg border border-gray-700 shadow-xl overflow-hidden">
+        <div class="mb-4 border-b border-gray-700">
+            <ul class="flex flex-wrap -mb-px text-sm font-medium text-center">
+                <li class="mr-2">
+                    <button id="tab-tabel" onclick="switchTab('tabel')" class="inline-block p-4 text-blue-400 border-b-2 border-blue-400 rounded-t-lg active" aria-current="page">Tabel Portofolio</button>
+                </li>
+                <li class="mr-2">
+                    <button id="tab-grafik" onclick="switchTab('grafik')" class="inline-block p-4 text-gray-400 border-b-2 border-transparent hover:text-gray-300 hover:border-gray-300 rounded-t-lg">Grafik Kinerja</button>
+                </li>
+            </ul>
+        </div>
+
+        <div id="konten-tabel" class="bg-gray-800 rounded-lg border border-gray-700 shadow-xl overflow-hidden block">
             <div class="overflow-x-auto max-h-[700px]">
                 <table class="w-full text-left border-collapse whitespace-nowrap">
                     <thead class="bg-gray-700 text-gray-300 sticky top-0 z-10 shadow-md">
@@ -61,51 +73,74 @@
                 </table>
             </div>
         </div>
+
+        <div id="konten-grafik" class="hidden">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-gray-800 p-4 rounded-lg border border-gray-700 shadow-xl">
+                    <h2 class="text-lg font-bold text-center mb-4 text-gray-200">Akumulasi Profit Bulan Ini (Harian)</h2>
+                    <canvas id="chartBulanan"></canvas>
+                </div>
+                <div class="bg-gray-800 p-4 rounded-lg border border-gray-700 shadow-xl">
+                    <h2 class="text-lg font-bold text-center mb-4 text-gray-200">Total Profit Per Bulan (Tahunan)</h2>
+                    <canvas id="chartTahunan"></canvas>
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <script>
+        // Logika Perpindahan Tab
+        function switchTab(tab) {
+            document.getElementById('konten-tabel').classList.add('hidden');
+            document.getElementById('konten-grafik').classList.add('hidden');
+            document.getElementById('tab-tabel').className = "inline-block p-4 text-gray-400 border-b-2 border-transparent hover:text-gray-300 hover:border-gray-300 rounded-t-lg";
+            document.getElementById('tab-grafik').className = "inline-block p-4 text-gray-400 border-b-2 border-transparent hover:text-gray-300 hover:border-gray-300 rounded-t-lg";
+
+            if(tab === 'tabel') {
+                document.getElementById('konten-tabel').classList.remove('hidden');
+                document.getElementById('tab-tabel').className = "inline-block p-4 text-blue-400 border-b-2 border-blue-400 rounded-t-lg active";
+            } else {
+                document.getElementById('konten-grafik').classList.remove('hidden');
+                document.getElementById('tab-grafik').className = "inline-block p-4 text-blue-400 border-b-2 border-blue-400 rounded-t-lg active";
+            }
+        }
+
+        // Parse Data CSV & Render UI
         document.addEventListener('DOMContentLoaded', function() {
             Papa.parse("portofolio_web.csv", {
                 download: true,
                 header: true,
                 skipEmptyLines: true,
                 complete: function(results) {
-                    let tableHTML = "";
                     let data = results.data;
                     
-                    // Kalkulasi Metrik Winrate
+                    // --- 1. RENDER METRIK & TABEL ---
                     let closedTrades = data.filter(r => r.STATUS === "CLOSE");
                     let winCount = closedTrades.filter(r => parseFloat(r.PL_PCT) > 0).length;
                     let winrate = closedTrades.length > 0 ? ((winCount / closedTrades.length) * 100).toFixed(1) : 0;
                     
-                    // Kalkulasi Profit & Loss Terbesar
                     let allPl = data.map(r => parseFloat(r.PL_PCT)).filter(n => !isNaN(n));
                     let maxProfit = allPl.length > 0 ? Math.max(...allPl).toFixed(1) : 0;
                     let maxLoss = allPl.length > 0 ? Math.min(...allPl).toFixed(1) : 0;
 
-                    // Simulasi 10 Juta/Trade
                     let modalPerTrade = 10000000;
                     let totalModal = data.length * modalPerTrade;
-                    let totalPnL = data.reduce((acc, r) => {
-                        let pl = parseFloat(r.PL_PCT) || 0;
-                        return acc + (modalPerTrade * (pl / 100));
-                    }, 0);
+                    let totalPnL = data.reduce((acc, r) => acc + (modalPerTrade * ((parseFloat(r.PL_PCT) || 0) / 100)), 0);
                     let totalSaldo = totalModal + totalPnL;
 
                     let formatRp = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 });
 
-                    // Update Kartu
                     document.getElementById('val-winrate').innerText = `${winrate}%`;
                     document.getElementById('val-maxmin').innerHTML = `<span class="text-green-400">+${maxProfit}%</span> / <span class="text-red-400">${maxLoss}%</span>`;
                     document.getElementById('val-modal').innerText = formatRp.format(totalModal);
                     document.getElementById('val-saldo').innerText = formatRp.format(totalSaldo);
 
-                    // Render Tabel
+                    let tableHTML = "";
                     data.forEach(row => {
-                        let statusBadge = "";
-                        if(row.STATUS === "OPEN") statusBadge = `<span class="bg-blue-600 text-white px-2 py-1 rounded text-xs font-bold">OPEN</span>`;
-                        else if(row.STATUS === "HOLD") statusBadge = `<span class="bg-yellow-500 text-black px-2 py-1 rounded text-xs font-bold">HOLD</span>`;
-                        else if(row.STATUS === "CLOSE") statusBadge = `<span class="bg-gray-600 text-white px-2 py-1 rounded text-xs font-bold">CLOSE</span>`;
+                        let statusBadge = row.STATUS === "OPEN" ? `<span class="bg-blue-600 text-white px-2 py-1 rounded text-xs font-bold">OPEN</span>` :
+                                          row.STATUS === "HOLD" ? `<span class="bg-yellow-500 text-black px-2 py-1 rounded text-xs font-bold">HOLD</span>` :
+                                          `<span class="bg-gray-600 text-white px-2 py-1 rounded text-xs font-bold">CLOSE</span>`;
 
                         let plColor = parseFloat(row.PL_PCT) > 0 ? "text-green-400" : (parseFloat(row.PL_PCT) < 0 ? "text-red-400" : "text-gray-400");
                         let plText = parseFloat(row.PL_PCT) > 0 ? `+${row.PL_PCT}%` : `${row.PL_PCT}%`;
@@ -124,8 +159,79 @@
                             </tr>
                         `;
                     });
-
                     document.getElementById('table-body').innerHTML = tableHTML;
+
+                    // --- 2. PERSIAPAN DATA GRAFIK ---
+                    // Sort data dari yang terlama ke terbaru berdasarkan TGL_SELL
+                    let validClosed = closedTrades.filter(r => r.TGL_SELL && r.TGL_SELL !== "-");
+                    validClosed.sort((a, b) => new Date(a.TGL_SELL) - new Date(b.TGL_SELL));
+
+                    // Grafik Tahunan (Per Bulan)
+                    let monthlyData = {};
+                    validClosed.forEach(r => {
+                        let monthStr = r.TGL_SELL.substring(0, 7); // Format: YYYY-MM
+                        if(!monthlyData[monthStr]) monthlyData[monthStr] = 0;
+                        monthlyData[monthStr] += parseFloat(r.PL_PCT);
+                    });
+
+                    let labelsTahunan = Object.keys(monthlyData);
+                    let dataTahunan = labelsTahunan.map(k => monthlyData[k].toFixed(2));
+
+                    // Grafik Bulanan Berjalan (Akumulasi Harian Bulan Ini)
+                    let currentMonthStr = new Date().toISOString().substring(0, 7);
+                    let currentMonthTrades = validClosed.filter(r => r.TGL_SELL.startsWith(currentMonthStr));
+                    
+                    let dailyData = {};
+                    let runningTotal = 0;
+                    currentMonthTrades.forEach(r => {
+                        runningTotal += parseFloat(r.PL_PCT);
+                        dailyData[r.TGL_SELL] = runningTotal; // Timpa dengan total terakhir di hari yang sama
+                    });
+
+                    let labelsBulanan = Object.keys(dailyData);
+                    let dataBulanan = labelsBulanan.map(k => dailyData[k].toFixed(2));
+
+                    // --- 3. RENDER CHART.JS ---
+                    Chart.defaults.color = '#9ca3af'; // Warna teks tailwind gray-400
+
+                    // Eksekusi Render Chart Bulanan
+                    new Chart(document.getElementById('chartBulanan'), {
+                        type: 'line',
+                        data: {
+                            labels: labelsBulanan,
+                            datasets: [{
+                                label: 'Akumulasi Profit (%)',
+                                data: dataBulanan,
+                                borderColor: '#3b82f6', // blue-500
+                                backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                                borderWidth: 3,
+                                fill: true,
+                                tension: 0.3
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            scales: { y: { beginAtZero: true } }
+                        }
+                    });
+
+                    // Eksekusi Render Chart Tahunan
+                    new Chart(document.getElementById('chartTahunan'), {
+                        type: 'bar',
+                        data: {
+                            labels: labelsTahunan,
+                            datasets: [{
+                                label: 'Total Profit Per Bulan (%)',
+                                data: dataTahunan,
+                                backgroundColor: dataTahunan.map(val => val >= 0 ? '#10b981' : '#ef4444'), // green-500 if +, red-500 if -
+                                borderRadius: 4
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            scales: { y: { beginAtZero: true } }
+                        }
+                    });
                 }
             });
         });
