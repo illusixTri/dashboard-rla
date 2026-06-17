@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Portofolio Live Tracker - Framework RLA</title>
+    <title>Portofolio Mbak Amel V2</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
 </head>
@@ -12,8 +12,8 @@
     <div class="max-w-7xl mx-auto">
         <header class="mb-8 flex items-center justify-between border-b border-gray-700 pb-4">
             <div>
-                <h1 class="text-3xl font-bold text-blue-400">📊 Portofolio Live Ledger</h1>
-                <p class="text-gray-400 mt-1">Real-time Yahoo Finance Sync & Trade History</p>
+                <h1 class="text-3xl font-bold text-blue-400">📈 Portofolio Mbak Amel V2</h1>
+                <p class="text-gray-400 mt-1">Live Trading Tracker & Performance Analytics</p>
             </div>
             <div class="text-right">
                 <p class="text-green-400 font-semibold flex items-center justify-end">
@@ -21,6 +21,25 @@
                 </p>
             </div>
         </header>
+
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-gray-800 p-4 rounded-lg border border-gray-700 shadow-md">
+                <p class="text-xs text-gray-400 font-bold uppercase tracking-wider">Winrate (Closed)</p>
+                <p id="val-winrate" class="text-2xl font-bold text-green-400 mt-1">0%</p>
+            </div>
+            <div class="bg-gray-800 p-4 rounded-lg border border-gray-700 shadow-md">
+                <p class="text-xs text-gray-400 font-bold uppercase tracking-wider">Max Profit / Loss</p>
+                <p id="val-maxmin" class="text-2xl font-bold text-white mt-1">0% / 0%</p>
+            </div>
+            <div class="bg-gray-800 p-4 rounded-lg border border-gray-700 shadow-md">
+                <p class="text-xs text-gray-400 font-bold uppercase tracking-wider">Total Modal (10Jt/Trade)</p>
+                <p id="val-modal" class="text-2xl font-bold text-blue-400 mt-1">Rp 0</p>
+            </div>
+            <div class="bg-gray-800 p-4 rounded-lg border border-gray-700 shadow-md">
+                <p class="text-xs text-gray-400 font-bold uppercase tracking-wider">Total Saldo Simulasi</p>
+                <p id="val-saldo" class="text-2xl font-bold text-yellow-400 mt-1">Rp 0</p>
+            </div>
+        </div>
 
         <div class="bg-gray-800 rounded-lg border border-gray-700 shadow-xl overflow-hidden">
             <div class="overflow-x-auto max-h-[700px]">
@@ -52,15 +71,42 @@
                 skipEmptyLines: true,
                 complete: function(results) {
                     let tableHTML = "";
+                    let data = results.data;
                     
-                    results.data.forEach(row => {
-                        // Badge Warna Status
+                    // Kalkulasi Metrik Winrate
+                    let closedTrades = data.filter(r => r.STATUS === "CLOSE");
+                    let winCount = closedTrades.filter(r => parseFloat(r.PL_PCT) > 0).length;
+                    let winrate = closedTrades.length > 0 ? ((winCount / closedTrades.length) * 100).toFixed(1) : 0;
+                    
+                    // Kalkulasi Profit & Loss Terbesar
+                    let allPl = data.map(r => parseFloat(r.PL_PCT)).filter(n => !isNaN(n));
+                    let maxProfit = allPl.length > 0 ? Math.max(...allPl).toFixed(1) : 0;
+                    let maxLoss = allPl.length > 0 ? Math.min(...allPl).toFixed(1) : 0;
+
+                    // Simulasi 10 Juta/Trade
+                    let modalPerTrade = 10000000;
+                    let totalModal = data.length * modalPerTrade;
+                    let totalPnL = data.reduce((acc, r) => {
+                        let pl = parseFloat(r.PL_PCT) || 0;
+                        return acc + (modalPerTrade * (pl / 100));
+                    }, 0);
+                    let totalSaldo = totalModal + totalPnL;
+
+                    let formatRp = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 });
+
+                    // Update Kartu
+                    document.getElementById('val-winrate').innerText = `${winrate}%`;
+                    document.getElementById('val-maxmin').innerHTML = `<span class="text-green-400">+${maxProfit}%</span> / <span class="text-red-400">${maxLoss}%</span>`;
+                    document.getElementById('val-modal').innerText = formatRp.format(totalModal);
+                    document.getElementById('val-saldo').innerText = formatRp.format(totalSaldo);
+
+                    // Render Tabel
+                    data.forEach(row => {
                         let statusBadge = "";
                         if(row.STATUS === "OPEN") statusBadge = `<span class="bg-blue-600 text-white px-2 py-1 rounded text-xs font-bold">OPEN</span>`;
                         else if(row.STATUS === "HOLD") statusBadge = `<span class="bg-yellow-500 text-black px-2 py-1 rounded text-xs font-bold">HOLD</span>`;
                         else if(row.STATUS === "CLOSE") statusBadge = `<span class="bg-gray-600 text-white px-2 py-1 rounded text-xs font-bold">CLOSE</span>`;
 
-                        // Pewarnaan P/L
                         let plColor = parseFloat(row.PL_PCT) > 0 ? "text-green-400" : (parseFloat(row.PL_PCT) < 0 ? "text-red-400" : "text-gray-400");
                         let plText = parseFloat(row.PL_PCT) > 0 ? `+${row.PL_PCT}%` : `${row.PL_PCT}%`;
                         let hargaSellText = row.HARGA_SELL !== "0" ? `Rp ${row.HARGA_SELL}` : "-";
